@@ -19,6 +19,7 @@ sys.setdefaultencoding("UTF-8")
 
 
 query = ''       # query string
+#currently able to fetch only replies of 200 tweets due to twitter limitation
 query_limit = 200               # tweet query limit
 
 path = os.path.dirname(os.path.abspath(__file__))       # path of this file
@@ -200,8 +201,10 @@ def get_tweets(tweet):
             print "***New User"
             print '@'+str(tweet['user']['screen_name'])
             ReplyListener.tweet_user_list.append('@'+str(tweet['user']['screen_name']))
+        # tracking replies of tweet
         if str(tweet['retweeted_status']['id_str']) not in ReplyListener.tweet_id_to_reply_id.keys():
             ReplyListener.tweet_id_to_reply_id[str(tweet['retweeted_status']['id_str'])] = []
+        # appending tweet info to retweet_list
         TweetListener.retweet_list[tweet['id_str']] =\
             dict([
                     ('id_str', tweet['id_str']),
@@ -239,8 +242,10 @@ def get_tweets(tweet):
             ReplyListener.tweet_user_list.append('@'+str(tweet['user']['screen_name']))
             print "***New User"
             print '@'+str(tweet['user']['screen_name'])
+        # tracking replies of tweet
         if str(tweet['id_str']) not in ReplyListener.tweet_id_to_reply_id.keys():
             ReplyListener.tweet_id_to_reply_id[str(tweet['id_str'])] = []
+        # appending tweet info to retweet_list
         TweetListener.tweet_list[tweet['id_str']] =\
             dict([
                     ('id_str', tweet['id_str']),
@@ -273,11 +278,12 @@ def get_replies(reply):
     if reply['in_reply_to_status_id_str'] in ReplyListener.tweet_id_list:
         print "REPLY FOR TWEET %s FOUND"%(str(reply['in_reply_to_status_id_str']))
         print reply['id_str']+" : "+reply['text']+"***"+reply['user']['screen_name']
-
+        # updating with reply tweet id
         if str(reply['id_str']) not in ReplyListener.tweet_id_list:
             ReplyListener.tweet_id_list.append(str(reply['id_str']))
             new_reply_id = True
         print "New tweet_id_list %s" % ReplyListener.tweet_id_list
+        # updating user list to track
         if '@'+str(reply['user']['screen_name']) not in ReplyListener.tweet_user_list:
             print "***New User"
             print '@'+str(reply['user']['screen_name'])
@@ -286,6 +292,7 @@ def get_replies(reply):
         print "New tweet_user_list %s" % ReplyListener.tweet_user_list
 
         if reply['in_reply_to_status_id_str'] in ReplyListener.tweet_id_to_reply_id.keys():
+            # direct reply to tweet
             print "\n***Found direct reply for %s" % reply['in_reply_to_status_id_str']
             print "OLD"
             print ReplyListener.tweet_id_to_reply_id[str(reply['in_reply_to_status_id_str'])]
@@ -303,6 +310,7 @@ def get_replies(reply):
                                                                                             )
                                                                                         )
             else:
+                # Appending reply to EXISTING tweets
                 print "Appending reply to EXISTING"
                 ReplyListener.tweet_reply[str(reply['in_reply_to_status_id_str'])].append(
                                                                                         dict(
@@ -312,6 +320,7 @@ def get_replies(reply):
                                                                                             )
                                                                                         )
         else:
+            # reply to replies of a tweet
             for k, v in ReplyListener.tweet_id_to_reply_id.items():
                 if str(reply['in_reply_to_status_id_str']) in v:
                     print "\n***Found reply to reply for %s" % reply['in_reply_to_status_id_str']
@@ -348,50 +357,53 @@ def get_replies(reply):
 
 
 
+if __name__ == '__main__':
 
+    '''
+    Begining of the twitter tweet fetching process
+    '''
+    # instantiates an object of TweetListener with output file
+    TListener = TweetListener(out_file_tweets)
 
-'''
-Begining of the twitter tweet fetching process
-'''
-# instantiates an object of TweetListener with output file
-TListener = TweetListener(out_file_tweets)
+    # creates an auth object
+    auth = OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
+    auth.set_access_token(ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
 
-# creates an auth object
-auth = OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
-auth.set_access_token(ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
+    # creates streaming object
+    tStream = Stream(auth, TListener)
+    print "*** Streaming "+str(query_limit)+" tweets with tag "+query
 
-# creates streaming object
-tStream = Stream(auth, TListener)
-print "*** Streaming "+str(query_limit)+" tweets with tag "+query
+    # fetchs tweets with 'query'
+    tStream.filter(track=[query])
 
-# fetchs tweets with 'query'
-tStream.filter(track=[query])
-
-# closing file out_file_tweets
-print "closing file out_file_tweets"
-out_file_tweets.close()
-print "ReplyListener.tweet_id_list"
-print ReplyListener.tweet_id_list
-print "ReplyListener.tweet_user_list"
-print ReplyListener.tweet_user_list
-print "length of ReplyListener.tweet_user_list = %d" % len(ReplyListener.tweet_user_list)
-print "Sleepting for 3 sec"
-time.sleep(3)
-
-#FETCHING REPLIES FOR TWEETS
-RListner = ReplyListener(out_file_reply)
-
-print "\n*** FETCHING REPLIES FOR TWEET'S "
-while True:
-    rStream = Stream(auth, RListner)
-    print "Rerunning stream with ReplyListener.tweet_user_list %s" % ReplyListener.tweet_user_list
+    # closing file out_file_tweets
+    print "closing file out_file_tweets"
+    out_file_tweets.close()
+    print "ReplyListener.tweet_id_list"
+    print ReplyListener.tweet_id_list
+    print "ReplyListener.tweet_user_list"
+    print ReplyListener.tweet_user_list
     print "length of ReplyListener.tweet_user_list = %d" % len(ReplyListener.tweet_user_list)
+    print "Sleepting for 3 sec"
+    time.sleep(3)
 
-    rStream.filter(track=ReplyListener.tweet_user_list[-199:])
-    rStream.disconnect()
-    if ReplyListener.error_flag:
-        print "Sleeping for 120 sec"
-        time.sleep(120)
-    print "Rerunning stream with updated ReplyListener.tweet_user_list %s" % ReplyListener.tweet_user_list
-    del rStream
+    #FETCHING REPLIES FOR TWEETS
+    RListner = ReplyListener(out_file_reply)
+
+    print "\n*** FETCHING REPLIES FOR TWEET'S "
+    while True:
+        # instantiating stream object
+        rStream = Stream(auth, RListner)
+        print "Rerunning stream with ReplyListener.tweet_user_list %s" % ReplyListener.tweet_user_list
+        print "length of ReplyListener.tweet_user_list = %d" % len(ReplyListener.tweet_user_list)
+
+        # tracking steam with user_list
+        rStream.filter(track=ReplyListener.tweet_user_list)
+        # recreating new stream
+        rStream.disconnect()
+        if ReplyListener.error_flag:
+            print "Sleeping for 120 sec"
+            time.sleep(120)
+        print "Rerunning stream with updated ReplyListener.tweet_user_list %s" % ReplyListener.tweet_user_list
+        del rStream
 
